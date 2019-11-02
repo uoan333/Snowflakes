@@ -7,3 +7,4 @@ Just compile and launch Snowflakes.exe (or just download exe) to get snow on you
 Technical details:
 - target Framework is .NET 4.6.1 if you have trouble please install proper .NET Framework libraries
 - to exit program close it from taskbar
+- add by uoan33:  move taskbar icon to tray；snowflake size is variable
