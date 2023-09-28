@@ -15,12 +15,36 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Windows.Forms;
 using System.Drawing;
+using static System.Net.Mime.MediaTypeNames;
+using System.Windows.Media.Effects;
+using System.Collections;
+
 namespace Snowflakes
 {
+    public class SnowNode {
+        public System.Windows.Controls.Image snowflake;
+        public bool on_the_ground;
+        public bool is_valid;
+
+        public SnowNode(System.Windows.Controls.Image img, bool ground, bool isvalid)
+        {
+            snowflake = img;
+            on_the_ground = ground;
+            is_valid = isvalid;
+        }
+    }
+      
+
     public partial class MainWindow : Window
     {
-        static int count = 50;// count
-        System.Windows.Controls.Image[] snow = new System.Windows.Controls.Image[count];
+        static int snow_count = 200;
+        int snow_size_min = 5;
+        int snow_size_max = 12;
+        
+        SnowNode[] snow_list = new SnowNode[snow_count];
+
+        // System.Windows.Controls.Image[] snow = new System.Windows.Controls.Image[snow_count];
+        // bool[] on_the_ground = new bool[snow_count];
         Random random = new Random();
         Grid grid = new Grid();
 
@@ -70,50 +94,67 @@ namespace Snowflakes
             });
             this.ShowInTaskbar = false;
 
+            // TODO: hide snowflakes when fullscreen_app exist
+            //System.Threading.Timer timer = new System.Threading.Timer(CheckFullScreenApp, null, 100, 3 * 1000);
+            //timer.Change(100, 3 * 1000);
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             Content = grid;
-            int[] i_size = { 5,10,6, 8,7, 9, 11, 12};
-            int j = 0;
-            for (int i = 0; i < count; i++)
-            {
-                snow[i] = new System.Windows.Controls.Image();
 
-                snow[i].Source = new BitmapImage(new Uri("snowflake.png", UriKind.Relative));
-                snow[i].Width = i_size[j];
-                if (j++ == i_size.Count()-1)
-                    j = 0;
-                grid.Children.Add(snow[i]);
+            for (int i = 0; i < snow_count; i++)
+            {
+                System.Windows.Controls.Image imgnode = new System.Windows.Controls.Image
+                {
+                    Source = new BitmapImage(new Uri("snowflake.png", UriKind.Relative)),
+                    Width = random.Next(snow_size_min, snow_size_max),
+                    Margin = new Thickness(
+                            random.Next(limitW_Left, limitW_Right),
+                            random.Next(limitH_Top + limitH_Top + limitH_Top, limitH_Bottom + limitH_Top + limitH_Top),
+                            0,
+                            0),
+                    //Effect = new BlurEffect // high GPU usage, i suggest retouch the PNG instead
+                    //{
+                    //    KernelType = KernelType.Gaussian,
+                    //    Radius = GetRandomDoubleNum(2, 4),
+                    //    RenderingBias = RenderingBias.Performance
+                    //},
+                };
+                bool valid = false;
+                if (i < snow_count / 2)
+                {
+                    grid.Children.Add(imgnode);
+                    valid = true;
+                }
+                snow_list[i] = new SnowNode(imgnode, false, valid);
             }
             await Move();
         }
 
         public async Task Move()
         {
-            for (int i = 0; i < count; i++)
-            {
-                int left = random.Next(limitW_Left, limitW_Right);
-                int top = random.Next(limitH_Top + limitH_Top + limitH_Top, limitH_Bottom + limitH_Top + limitH_Top);
-                snow[i].Margin = new Thickness(left, top, 0, 0);
-            }
-
             while (true)
             {
-                for (int i = 0; i < count; i++)
+                foreach (SnowNode snownode in snow_list)
                 {
-                    var left = snow[i].Margin.Left;
-                    var top = snow[i].Margin.Top;
-                    top += 2;
-                    if (top > limitH_Bottom)
+                    if (snownode.on_the_ground == true || snownode.is_valid == false)
                     {
-                        top = limitH_Top;
-                        left = random.Next(limitW_Left, limitW_Right);
+                        continue;
                     }
-                    snow[i].Margin = new Thickness(left, top, 0, 0);
+                    var left = snownode.snowflake.Margin.Left;
+                    var top = snownode.snowflake.Margin.Top;
+                    if ( top + random.Next(10, 50) > limitH_Bottom)
+                    {
+                       
+                        DelayAction(60*1000, snownode);
+                    }
+                    else
+                    {
+                        snownode.snowflake.Margin = new Thickness(left, top+2, 0, 0);
+                    }
                 }
-                await Task.Delay(40);//speed
+                await Task.Delay(40); // speed
             }
         }
         private void Show(object sender, EventArgs e)
@@ -124,12 +165,114 @@ namespace Snowflakes
 
         private void Hide(object sender, EventArgs e)
         {
-            this.Visibility = System.Windows.Visibility.Hidden;
+            this.Hide();
+            //this.Visibility = System.Windows.Visibility.Hidden;
         }
 
         private void Close(object sender, EventArgs e)
         {
             System.Windows.Application.Current.Shutdown();
         }
+
+        public void DelayAction(int millisecond, SnowNode s)
+        {
+            s.on_the_ground = true;
+            AddSnowflake(true);
+          
+            var timer = new System.Windows.Threading.DispatcherTimer();
+            timer.Tick += delegate
+            {
+                RemoveSnowflake(s);
+                timer.Stop();
+            };
+
+            timer.Interval = TimeSpan.FromMilliseconds(millisecond);
+            timer.Start();
+        }
+
+        public void AddSnowflake(bool valid ) {
+
+            foreach (SnowNode n in snow_list)
+            {
+                if (n.is_valid == false && n.on_the_ground == false)
+                {
+                    var left = random.Next(limitW_Left, limitW_Right);
+                    n.snowflake.Margin = new Thickness(left, limitH_Top, 0, 0);
+                    grid.Children.Add(n.snowflake);
+                    n.is_valid = true;
+                    return;
+                }
+            }
+
+
+        }
+
+        public void RemoveSnowflake(SnowNode s)
+        {
+            grid.Children.Remove(s.snowflake);
+            s.is_valid = false;
+            s.on_the_ground = false;
+        }
+
+        //public double GetRandomDoubleNum(double minimum, double maximum)
+        //{
+        //    return random.NextDouble() * (maximum - minimum) + minimum;
+        //}
+
+
+        // TODO: hide snowflakes when fullscreen_app exist
+        //[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        //private struct RECT
+        //{
+        //    public int left;
+        //    public int top;
+        //    public int right;
+        //    public int bottom;
+        //}
+
+        //[System.Runtime.InteropServices.DllImport("user32.dll")]
+        //private static extern bool GetWindowRect(System.Runtime.InteropServices.HandleRef hWnd, [System.Runtime.InteropServices.In, System.Runtime.InteropServices.Out] ref RECT rect);
+
+        //[System.Runtime.InteropServices.DllImport("user32.dll")]
+        //private static extern IntPtr GetForegroundWindow();
+
+        //public static bool IsForegroundFullScreen()
+        //{
+        //    return IsForegroundFullScreen(null);
+        //}
+
+        //public static bool IsForegroundFullScreen(Screen screen)
+        //{
+        //    if (screen == null)
+        //    {
+        //        screen = Screen.PrimaryScreen;
+        //    }
+        //    RECT rect = new RECT();
+        //    GetWindowRect(new System.Runtime.InteropServices.HandleRef(null, GetForegroundWindow()), ref rect);
+        //    return new System.Drawing.Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top).Contains(screen.Bounds);
+        //}
+
+
+        //public void CheckFullScreenApp(object state)
+        //{
+        //    var xx = IsForegroundFullScreen(null);
+        //    var aa = this.Visibility;
+        //    int i = 2;
+        //    if (aa != System.Windows.Visibility.Hidden )
+        //    {
+        //        this.Visibility = System.Windows.Visibility.Hidden;
+        //        //this.Hide();
+        //    }
+        //    //else if (this.Visibility == System.Windows.Visibility.Hidden)
+        //    //{
+        //    //    this.Visibility = System.Windows.Visibility.Visible;
+        //    //    this.Activate();
+        //    //}
+        //    return;
+        //}
+
     }
+
 }
+
+
